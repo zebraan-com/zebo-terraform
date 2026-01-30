@@ -1,0 +1,101 @@
+name: Terraform Deployment
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'environments/**'
+      - 'modules/**'
+      - '.github/workflows/terraform-create.yaml'
+  workflow_dispatch:
+    inputs:
+      deploy_to_prod:
+        description: 'Deploy to production environment'
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  terraform:
+    name: Validate, Plan, and Apply (dev)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: environments/dev
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          version: '>= 410.0.0'
+          install_components: 'gke-gcloud-auth-plugin'
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_CREDENTIALS }}
+          export_environment_variables: true
+          create_credentials_file: true
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.5
+
+      - name: Write dev.ci.tfvars from secrets
+        run: |
+          cat > dev.ci.tfvars <<EOF
+          project_id              = "${PROJECT_ID}"
+          region                  = "${REGION}"
+          registry_id             = "${REGISTRY_ID}"
+          node_machine_type       = "${NODE_MACHINE_TYPE}"
+          min_nodes               = ${MIN_NODES}
+          max_nodes               = ${MAX_NODES}
+          use_spot_instances      = ${USE_SPOT_INSTANCES}
+          gke_deletion_protection = ${GKE_DELETION_PROTECTION}
+
+          terraform_service_account_email = "${TERRAFORM_SA_EMAIL}"
+
+          secrets = {
+            ZEO_DB_PASSWORD = "${ZEO_DB_PASSWORD}"
+            ZEO_OPENAI_KEY  = "${ZEO_OPENAI_KEY}"
+            ZEO_MF_UTIL_KEY = "${ZEO_MF_UTIL_KEY}"
+          }
+          EOF
+        env:
+          PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          REGION: ${{ vars.GCP_REGION || 'asia-south1' }}
+          REGISTRY_ID: ${{ vars.ARTIFACT_REGISTRY_ID || 'zebo-registry' }}
+          NODE_MACHINE_TYPE: ${{ vars.NODE_MACHINE_TYPE || 'e2-medium' }}
+          MIN_NODES: ${{ vars.MIN_NODES || '1' }}
+          MAX_NODES: ${{ vars.MAX_NODES || '5' }}
+          USE_SPOT_INSTANCES: ${{ vars.USE_SPOT_INSTANCES || 'true' }}
+          GKE_DELETION_PROTECTION: ${{ vars.GKE_DELETION_PROTECTION || 'true' }}
+          TERRAFORM_SA_EMAIL: ${{ vars.TERRAFORM_SERVICE_ACCOUNT_EMAIL || '' }}
+          ZEO_DB_PASSWORD: ${{ secrets.ZEO_DB_PASSWORD }}
+          ZEO_OPENAI_KEY: ${{ secrets.ZEO_OPENAI_KEY }}
+          ZEO_MF_UTIL_KEY: ${{ secrets.ZEO_MF_UTIL_KEY }}
+
+      - name: Terraform Init
+        run: terraform init -input=false
+
+      - name: Terraform Fmt
+        run: terraform fmt -check
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan
+        run: terraform plan -input=false -var-file=dev.ci.tfvars
+
+      - name: Terraform Apply (main branch)
+        if: github.ref == 'refs/heads/main'
+        run: |
+          terraform apply -input=false -auto-approve -var-file=dev.ci.tfvars
+          terraform output
