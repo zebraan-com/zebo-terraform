@@ -1,0 +1,77 @@
+# ArgoCD Helm Chart Values
+# Configured for GKE with LoadBalancer access
+
+global:
+  domain: ${hostname}
+
+server:
+  service:
+    type: ClusterIP  # We create a separate LoadBalancer service
+  
+  # Disable HTTPS redirect since we're using HTTP LoadBalancer
+  extraArgs:
+    - --insecure
+
+  # Enable metrics
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: false  # Set to true if you have Prometheus Operator
+
+  ingress:
+    enabled: false  # Using LoadBalancer instead of Ingress
+
+configs:
+  params:
+    server.insecure: true  # Allow HTTP access
+
+# Resource limits for cost optimization
+controller:
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+
+server:
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+repoServer:
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+applicationSet:
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+# Redis
+redis:
+  resources:
+    limits:
+      cpu: 200m
+      memory: 128Mi
+    requests:
+      cpu: 100m
+      memory: 64Mi
+
+# Enable ApplicationSet controller
+applicationSet:
+  enabled: true

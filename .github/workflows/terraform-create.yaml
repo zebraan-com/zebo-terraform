@@ -1,23 +1,15 @@
-name: Terraform Deployment
+name: Terraform Dev Environment
 
-on:
-  push:
-    branches: [ main ]
+on: 
+  workflow_dispatch:
     paths:
-      - 'environments/**'
+      - 'environments/dev/**'
       - 'modules/**'
       - '.github/workflows/terraform-create.yaml'
-  workflow_dispatch:
-    inputs:
-      deploy_to_prod:
-        description: 'Deploy to production environment'
-        required: false
-        default: 'false'
-        type: boolean
 
 jobs:
   terraform:
-    name: Validate, Plan, and Apply (dev)
+    name: Deploy Dev Environment
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -47,20 +39,19 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.9.5
+          terraform_wrapper: false  # Needed to properly capture outputs
 
       - name: Write dev.ci.tfvars from secrets
         run: |
           cat > dev.ci.tfvars <<EOF
           project_id              = "${PROJECT_ID}"
           region                  = "${REGION}"
-          registry_id             = "${REGISTRY_ID}"
+          environment             = "dev"
           node_machine_type       = "${NODE_MACHINE_TYPE}"
           min_nodes               = ${MIN_NODES}
           max_nodes               = ${MAX_NODES}
           use_spot_instances      = ${USE_SPOT_INSTANCES}
           gke_deletion_protection = ${GKE_DELETION_PROTECTION}
-
-          terraform_service_account_email = "${TERRAFORM_SA_EMAIL}"
 
           secrets = {
             ZEO_DB_PASSWORD = "${ZEO_DB_PASSWORD}"
@@ -71,13 +62,11 @@ jobs:
         env:
           PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
           REGION: ${{ vars.GCP_REGION || 'asia-south1' }}
-          REGISTRY_ID: ${{ vars.ARTIFACT_REGISTRY_ID || 'zebo-registry' }}
           NODE_MACHINE_TYPE: ${{ vars.NODE_MACHINE_TYPE || 'e2-medium' }}
           MIN_NODES: ${{ vars.MIN_NODES || '1' }}
           MAX_NODES: ${{ vars.MAX_NODES || '5' }}
           USE_SPOT_INSTANCES: ${{ vars.USE_SPOT_INSTANCES || 'true' }}
           GKE_DELETION_PROTECTION: ${{ vars.GKE_DELETION_PROTECTION || 'true' }}
-          TERRAFORM_SA_EMAIL: ${{ vars.TERRAFORM_SERVICE_ACCOUNT_EMAIL || '' }}
           ZEO_DB_PASSWORD: ${{ secrets.ZEO_DB_PASSWORD }}
           ZEO_OPENAI_KEY: ${{ secrets.ZEO_OPENAI_KEY }}
           ZEO_MF_UTIL_KEY: ${{ secrets.ZEO_MF_UTIL_KEY }}
@@ -94,8 +83,26 @@ jobs:
       - name: Terraform Plan
         run: terraform plan -input=false -var-file=dev.ci.tfvars
 
-      - name: Terraform Apply (main branch)
+      - name: Terraform Apply
+        if: github.ref == 'refs/heads/main'
+        run: terraform apply -input=false -auto-approve -var-file=dev.ci.tfvars
+
+      - name: Get ArgoCD Info
+        if: github.ref == 'refs/heads/main'
+        id: argocd
+        run: |
+          echo "Getting ArgoCD access information..."
+          ARGOCD_URL=$(terraform output -raw argocd_url)
+          echo "argocd_url=$ARGOCD_URL" >> $GITHUB_OUTPUT
+          echo "::notice title=ArgoCD URL::$ARGOCD_URL"
+          echo "::notice title=ArgoCD Username::admin"
+          echo "::notice title=ArgoCD Password::Run 'terraform output -raw argocd_admin_password' to retrieve"
+
+      - name: Display Outputs
         if: github.ref == 'refs/heads/main'
         run: |
-          terraform apply -input=false -auto-approve -var-file=dev.ci.tfvars
-          terraform output
+          echo "========================================="
+          echo "   DEPLOYMENT SUCCESSFUL!"
+          echo "========================================="
+          terraform output argocd_access_info
+          echo "========================================="

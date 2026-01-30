@@ -10,16 +10,34 @@ variable "region" {
   default     = "asia-south1"
 }
 
-variable "zone" {
-  description = "GCP Zone"
+variable "environment" {
+  description = "Environment name"
   type        = string
-  default     = "asia-south1-a"
+  default     = "dev"
 }
 
-variable "registry_id" {
-  description = "Artifact Registry repository id"
+variable "network_name" {
+  description = "VPC network name"
   type        = string
-  default     = "zebo-registry"
+  default     = "default"
+}
+
+variable "subnetwork_name" {
+  description = "Subnetwork name"
+  type        = string
+  default     = "default"
+}
+
+variable "ip_range_pods" {
+  description = "Secondary IP range for pods"
+  type        = string
+  default     = "pods"
+}
+
+variable "ip_range_services" {
+  description = "Secondary IP range for services"
+  type        = string
+  default     = "services"
 }
 
 variable "node_machine_type" {
@@ -29,15 +47,21 @@ variable "node_machine_type" {
 }
 
 variable "min_nodes" {
-  description = "Minimum number of nodes in the node pool"
+  description = "Minimum number of nodes"
   type        = number
-  default     = 0
+  default     = 1
 }
 
 variable "max_nodes" {
-  description = "Maximum number of nodes in the node pool"
+  description = "Maximum number of nodes"
   type        = number
-  default     = 1
+  default     = 5
+}
+
+variable "use_spot_instances" {
+  description = "Use spot instances for cost savings"
+  type        = bool
+  default     = true
 }
 
 variable "gke_deletion_protection" {
@@ -46,26 +70,14 @@ variable "gke_deletion_protection" {
   default     = true
 }
 
-variable "environment" {
-  description = "Environment name (e.g., dev, staging, prod)"
+variable "argocd_hostname" {
+  description = "Hostname for ArgoCD (can be IP or domain)"
   type        = string
-  default     = "dev"
+  default     = "argocd.local"
 }
 
 variable "secrets" {
   description = "Map of secrets to create in Secret Manager"
   type        = map(string)
   default     = {}
-}
-
-variable "terraform_service_account_email" {
-  description = "Email of the service account used by Terraform (e.g., from GitHub Actions)"
-  type        = string
-  default     = ""
-}
-
-variable "use_spot_instances" {
-  description = "Whether to use spot instances for GKE node pool (enabled for dev to reduce costs)"
-  type        = bool
-  default     = true
 }

@@ -1,241 +1,305 @@
 # Zebo Terraform - Infrastructure as Code
 
-Centralized IaaC repository for provisioning GCP resources for the Zebo platform.
+Centralized IaaC repository for provisioning GCP resources for the Zebo platform using a **two-layer architecture**.
+
+## 🏗️ Two-Layer Architecture
+
+### Why Two Layers?
+
+We separate infrastructure into **persistent** and **ephemeral** layers to:
+- ✅ **Protect critical resources** - Artifact Registry survives environment rebuilds
+- ✅ **Enable rapid iteration** - Destroy/recreate GKE clusters without losing Docker images
+- ✅ **Reduce costs** - Destroy dev environments when not in use
+- ✅ **Simplify management** - Clear separation of concerns
+
+### Layer 1: Platform (Persistent)
+
+**Purpose**: Foundational resources that should RARELY be destroyed
+
+**Resources**:
+- Artifact Registry (Docker images)
+- Terraform State Bucket
+- Service Accounts (terraform-ci, gke-node-sa)
+- IAM Bindings
+- Future: Shared VPC, DNS, Cloud NAT
+
+**Location**: `platform/`
+
+**Deployment**: Manual, one-time setup
+
+### Layer 2: Environments (Ephemeral)
+
+**Purpose**: Resources that can be destroyed/recreated frequently
+
+**Resources**:
+- GKE Cluster
+- ArgoCD (via Helm)
+- Application Secrets
+- LoadBalancers
+
+**Location**: `environments/dev/`, `environments/prod/`
+
+**Deployment**: Automated via GitHub Actions
 
 ## 📁 Repository Structure
 
 ```
 zebo-terraform/
-├── environments/          # Environment-specific configurations
-│   ├── dev/              # Development environment
-│   │   ├── main.tf       # Main configuration
-│   │   ├── variables.tf  # Variable definitions
-│   │   ├── outputs.tf    # Output definitions
-│   │   ├── provider.tf   # Provider configuration
-│   │   └── dev.tfvars    # Development values
-│   └── prod/             # Production environment (future)
-├── modules/              # Reusable Terraform modules
-│   ├── gke/             # GKE cluster module
-│   ├── artifact_registry/ # Container registry
-│   ├── secret_manager/   # Secret management
-│   └── project/          # GCP project APIs
-└── .github/workflows/    # CI/CD pipelines
-    ├── terraform-dev.yaml
-    └── terraform-destroy-dev.yaml
+├── platform/                    # PERSISTENT LAYER ⚡
+│   ├── main.tf                 # Platform resources
+│   ├── variables.tf            # Platform variables
+│   └── platform.tfvars         # Platform configuration
+│
+├── environments/                # EPHEMERAL LAYER 🔄
+│   ├── dev/
+│   │   ├── main.tf             # Dev environment
+│   │   ├── variables.tf        # Dev variables
+│   │   ├── dev.tfvars          # Dev configuration
+│   │   └── argocd-values.yaml  # ArgoCD Helm values
+│   └── prod/                   # Production (future)
+│
+├── modules/                     # SHARED MODULES
+│   ├── gke/                    # GKE cluster module
+│   ├── artifact_registry/      # Container registry
+│   ├── secret_manager/         # Secret management
+│   └── project/                # GCP API management
+│
+└── .github/workflows/           # CI/CD PIPELINES
+    ├── terraform-platform.yaml # Platform deployment
+    ├── terraform-create.yaml      # Dev environment
+    └── terraform-destroy.yaml
 ```
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 
-- GCP account with project `zebraan-gcp-zebo-dev`
-- `gcloud` CLI installed and authenticated
+- GCP project: `zebraan-gcp-zebo-dev`
+- `gcloud` CLI installed
 - Terraform >= 1.9.5
+- GitHub repository access
 
-### Local Development
+### 1. Deploy Platform Layer (One-Time)
 
 ```bash
-# Navigate to environment
+# Deploy persistent infrastructure
+cd platform
+terraform init
+terraform apply -var-file=platform.tfvars
+
+# Note the outputs!
+terraform output
+```
+
+**Creates**:
+- ✅ Artifact Registry at `asia-south1-docker.pkg.dev/zebraan-gcp-zebo-dev/zebo-registry`
+- ✅ State bucket at `zebraan-gcp-zebo-dev-terraform-state`
+- ✅ Service accounts with proper IAM bindings
+
+### 2. Configure GitHub
+
+```bash
+# Create service account key
+gcloud iam service-accounts keys create key.json \
+  --iam-account=terraform-ci@zebraan-gcp-zebo-dev.iam.gserviceaccount.com
+
+# Add to GitHub Secrets: GCP_CREDENTIALS
+# Then DELETE the local file!
+```
+
+Add these to GitHub Secrets:
+- `GCP_CREDENTIALS` - Service account JSON
+- `GCP_PROJECT_ID` - `zebraan-gcp-zebo-dev`
+- `ZEO_DB_PASSWORD`, `ZEO_OPENAI_KEY`, `ZEO_MF_UTIL_KEY`
+
+### 3. Deploy Dev Environment
+
+```bash
+# Trigger via push
+git push origin main
+
+# Or manually
+cd environments/dev
+terraform apply -var-file=dev.tfvars
+```
+
+**Creates**:
+- ✅ GKE cluster with autoscaling (1-5 nodes, spot instances)
+- ✅ ArgoCD with LoadBalancer access
+- ✅ Application secrets in Secret Manager
+
+### 4. Access ArgoCD
+
+```bash
 cd environments/dev
 
-# Initialize Terraform
-terraform init
+# Get access information
+terraform output argocd_access_info
 
-# Plan changes
-terraform plan -var-file=dev.tfvars
+# Or specific outputs
+terraform output argocd_url
+terraform output -raw argocd_admin_password
+```
+
+Open the URL in browser:
+- **Username**: `admin`
+- **Password**: (from terraform output)
+
+## 🔧 Key Features
+
+### ✅ Service Account Permission Fix
+
+The platform layer automatically grants terraform-ci permission to impersonate gke-node-sa, preventing the common error:
+
+```
+Error 400: The user does not have access to service account "gke-node-sa@..."
+```
+
+This is handled permanently in `platform/main.tf`:
+```hcl
+resource "google_service_account_iam_member" "terraform_ci_can_use_gke_node_sa" {
+  service_account_id = google_service_account.gke_node_sa.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:${google_service_account.terraform_ci.email}"
+}
+```
+
+### ✅ ArgoCD Auto-Deployment
+
+ArgoCD is automatically deployed via Helm with:
+- LoadBalancer for external access
+- HTTP mode (insecure) for simplicity
+- Resource limits for cost optimization
+- Admin password auto-generated
+
+### ✅ Cost Optimization
+
+- Spot instances enabled by default (70% cost reduction)
+- Resource limits on all ArgoCD components
+- Autoscaling (1-5 nodes) based on workload
+- Can destroy dev environment when not in use
+
+**Estimated costs**:
+- Platform (always running): **~$0.10/month**
+- Dev environment (when active): **~$40-70/month**
+
+## 🔄 Common Workflows
+
+### Deploy New Environment
+
+```bash
+cd environments/dev
+terraform apply -var-file=dev.tfvars
+```
+
+### Update GKE Configuration
+
+```bash
+# Edit variables
+vim environments/dev/dev.tfvars
 
 # Apply changes
 terraform apply -var-file=dev.tfvars
 ```
 
-## 🔧 Infrastructure Components
-
-### Core Resources
-
-- **GKE Cluster** - Kubernetes cluster for application workloads
-- **Artifact Registry** - Docker image storage
-- **Secret Manager** - Secure secret storage
-- **Service Accounts** - IAM for GKE nodes and Terraform
-
-### Features
-
-✅ **Spot Instances** - Cost-optimized GKE nodes  
-✅ **Autoscaling** - Dynamic node pool scaling  
-✅ **Workload Identity** - Secure GCP API access  
-✅ **Network Policies** - Enhanced security with Calico  
-✅ **VPC-Native Networking** - Alias IP ranges  
-
-## 🎯 GitHub Actions
-
-### Terraform Deployment
-
-Automatically runs on:
-- Push to `main` branch (changes to `environments/`, `modules/`, or workflows)
-- Manual trigger via `workflow_dispatch`
-
-**Variables required:**
-- `GCP_REGION` - GCP region (default: asia-south1)
-- `ARTIFACT_REGISTRY_ID` - Registry ID (default: zebo-registry)
-- `NODE_MACHINE_TYPE` - VM type (default: e2-medium)
-- `MIN_NODES` - Minimum nodes (default: 1)
-- `MAX_NODES` - Maximum nodes (default: 5)
-- `USE_SPOT_INSTANCES` - Enable spot VMs (default: true)
-- `GKE_DELETION_PROTECTION` - Cluster protection (default: true)
-- `TERRAFORM_SERVICE_ACCOUNT_EMAIL` - Terraform SA email
-
-**Secrets required:**
-- `GCP_CREDENTIALS` - Service account JSON key
-- `GCP_PROJECT_ID` - GCP project ID
-- `ZEO_DB_PASSWORD` - Database password
-- `ZEO_OPENAI_KEY` - OpenAI API key
-- `ZEO_MF_UTIL_KEY` - MF utility key
-
-### Terraform Destroy
-
-Manual workflow for destroying infrastructure:
-1. Go to Actions → Terraform Destroy Dev
-2. Click "Run workflow"
-3. Type `destroy` to confirm
-4. Click "Run workflow"
-
-## 📝 Configuration
-
-### Adding a New Environment
-
-```bash
-# Create new environment directory
-mkdir -p environments/staging
-
-# Copy base configuration
-cp environments/dev/*.tf environments/staging/
-
-# Update variables
-vim environments/staging/staging.tfvars
-```
-
-### Modifying Resources
-
-1. Edit module files in `modules/`
-2. Update environment config in `environments/<env>/`
-3. Run `terraform plan` to preview changes
-4. Commit and push to trigger CI/CD
-
-## 🔐 Security Best Practices
-
-- ✅ Never commit `.tfvars` files with real secrets
-- ✅ Use GitHub Secrets for sensitive data
-- ✅ Service accounts follow principle of least privilege
-- ✅ Workload Identity enabled for secure pod authentication
-- ✅ Network policies enforced via Calico
-- ✅ Private GKE nodes (configurable)
-
-## 💰 Cost Optimization
-
-Current dev configuration:
-- **Spot Instances**: ~70% cost reduction
-- **Autoscaling**: Min 1, Max 5 nodes
-- **e2-medium instances**: Cost-effective for dev
-- **Estimated cost**: ~$20-50/month when active
-
-## 🧪 Testing
-
-### Validate Configuration
+### Destroy Dev Environment (Save Costs!)
 
 ```bash
 cd environments/dev
-terraform fmt -check
-terraform validate
-terraform plan -var-file=dev.tfvars
+terraform destroy -var-file=dev.tfvars
 ```
 
-### Pre-commit Hooks (Optional)
+**Your Docker images are safe** - they remain in Artifact Registry!
+
+### Rebuild Dev Environment
 
 ```bash
-# Install pre-commit
-pip install pre-commit
-
-# Setup hooks
-pre-commit install
-
-# Run manually
-pre-commit run --all-files
+cd environments/dev
+terraform apply -var-file=dev.tfvars
 ```
 
-## 📊 Outputs
+Recreates GKE and ArgoCD, pulls images from Artifact Registry.
 
-After applying, Terraform outputs:
-- `gke_cluster_name` - Name of the GKE cluster
-- `gcloud_get_credentials` - Command to configure kubectl
+## 📊 Infrastructure Diagram
 
-## 🔄 Workflow
-
-```mermaid
-graph LR
-    A[Code Change] --> B[Push to Main]
-    B --> C[GitHub Actions]
-    C --> D[Terraform Plan]
-    D --> E[Terraform Apply]
-    E --> F[Infrastructure Ready]
-    F --> G[Deploy Apps via zebo-infra]
+```
+┌─────────────────────────────────────────────────────┐
+│              PLATFORM LAYER (Persistent)            │
+│  • Artifact Registry: Docker images                │
+│  • State Bucket: Terraform state                   │
+│  • terraform-ci SA: CI/CD automation               │
+│  • gke-node-sa: GKE node identity                  │
+│  • IAM: terraform-ci → gke-node-sa permission      │
+└─────────────────────────────────────────────────────┘
+                         ↓ references
+┌─────────────────────────────────────────────────────┐
+│           DEV ENVIRONMENT (Ephemeral)               │
+│  • GKE Cluster (1-5 nodes, spot instances)         │
+│  • ArgoCD (Helm + LoadBalancer)                    │
+│  • Secrets (Secret Manager)                        │
+└─────────────────────────────────────────────────────┘
+                         ↓ deploys to
+┌─────────────────────────────────────────────────────┐
+│            APPLICATIONS (zebo-infra repo)           │
+│  • Kubernetes manifests                            │
+│  • Helm charts                                     │
+│  • ArgoCD ApplicationSets                          │
+└─────────────────────────────────────────────────────┘
 ```
 
-## 🆘 Troubleshooting
+## 🚨 Troubleshooting
 
-### Service Account Permission Error
+### Platform Resources Already Exist
 
-If you see: `Error 400: The user does not have access to service account`
-
-**Solution**: Set `TERRAFORM_SERVICE_ACCOUNT_EMAIL` in GitHub Variables:
-```bash
-# Find your Terraform SA
-gcloud iam service-accounts list --project=zebraan-gcp-zebo-dev
-
-# Add to GitHub Variables
-# Settings → Secrets and variables → Actions → Variables
-# Name: TERRAFORM_SERVICE_ACCOUNT_EMAIL
-# Value: terraform@zebraan-gcp-zebo-dev.iam.gserviceaccount.com
-```
-
-### State Lock Error
-
-If Terraform state is locked:
-```bash
-# List locks
-terraform force-unlock <LOCK_ID>
-
-# Or check GCS bucket for stuck locks
-```
-
-### Plan Shows Unexpected Changes
+If you already have resources from previous setup:
 
 ```bash
-# Refresh state
-terraform refresh -var-file=dev.tfvars
+cd platform
 
-# Check drift
-terraform plan -detailed-exitcode -var-file=dev.tfvars
+# Import existing resources
+terraform import google_storage_bucket.terraform_state zebraan-gcp-zebo-dev-terraform-state
+terraform import google_service_account.terraform_ci projects/zebraan-gcp-zebo-dev/serviceAccounts/terraform-ci@zebraan-gcp-zebo-dev.iam.gserviceaccount.com
+terraform import google_service_account.gke_node_sa projects/zebraan-gcp-zebo-dev/serviceAccounts/gke-node-sa@zebraan-gcp-zebo-dev.iam.gserviceaccount.com
 ```
 
-## 🔗 Related Repositories
+### ArgoCD LoadBalancer Pending
 
-- **zebo-infra** - Kubernetes manifests and Helm charts
-- **zebo** - Application code
+Wait 3-5 minutes for GCP to provision the LoadBalancer:
+
+```bash
+kubectl get svc -n argocd argocd-server-lb -w
+```
+
+### Can't Access ArgoCD
+
+1. Check LoadBalancer has EXTERNAL-IP
+2. Use HTTP (not HTTPS): `http://X.X.X.X`
+3. Verify firewall rules allow port 80
 
 ## 📚 Documentation
 
-- [GKE Best Practices](https://cloud.google.com/kubernetes-engine/docs/best-practices)
-- [Terraform GCP Provider](https://registry.terraform.io/providers/hashicorp/google/latest/docs)
-- [Workload Identity Setup](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity)
+- **[SETUP_TWO_LAYER.md](./SETUP_TWO_LAYER.md)** - Detailed setup guide
+- **[POST_MIGRATION_CHECKLIST.md](./POST_MIGRATION_CHECKLIST.md)** - Migration tasks
+
+## 🔗 Related Repositories
+
+- **[zebo-infra](https://github.com/YOUR_ORG/zebo-infra)** - Kubernetes manifests and ArgoCD applications
+- **[zebo](https://github.com/YOUR_ORG/zebo)** - Application code
 
 ## 🤝 Contributing
 
-1. Create a feature branch
-2. Make changes
-3. Test locally: `terraform plan`
-4. Submit PR with description
-5. Wait for CI checks to pass
-6. Merge after approval
+1. Platform changes → Create PR to `platform/`
+2. Environment changes → Create PR to `environments/`
+3. Module changes → Create PR to `modules/`
+4. Test locally before committing
+5. CI/CD will validate on PR
 
 ## 📄 License
 
-See [LICENSE](LICENSE) file for details.
+See [LICENSE](LICENSE) file.
+
+---
+
+**Status**: ✅ Two-layer architecture implemented  
+**ArgoCD**: ✅ Auto-deployed with LoadBalancer  
+**Cost Optimization**: ✅ Spot instances + destroyable environments

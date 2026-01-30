@@ -114,7 +114,7 @@ Then push a change or manually trigger the workflow.
    }
    ```
 
-2. Add to `.github/workflows/terraform-dev.yaml`:
+2. Add to `.github/workflows/terraform-create.yaml`:
    ```yaml
    secrets = {
      # ... existing secrets ...
