@@ -21,10 +21,10 @@ resource "google_compute_subnetwork" "gke_subnet" {
   count = var.subnetwork_name == "default" ? 0 : 1
 
   name          = var.subnetwork_name
-  ip_cidr_range = cidrsubnet("10.0.0.0/8", 8, 0) # Creates a /24 subnet
+  ip_cidr_range = "10.0.0.0/24" # Primary subnet range
   region        = var.region
   project       = var.project_id
-  network       = var.network_name == "default" ? "default" : google_compute_network.gke_network[0].id
+  network       = google_compute_network.gke_network[0].id
 
   secondary_ip_range {
     range_name    = "pods"
@@ -48,8 +48,8 @@ resource "google_container_cluster" "primary" {
   remove_default_node_pool = true
   initial_node_count       = 1
 
-  network    = var.network_name
-  subnetwork = var.subnetwork_name
+  network    = var.network_name == "default" ? "default" : google_compute_network.gke_network[0].id
+  subnetwork = var.subnetwork_name == "default" ? "default" : google_compute_subnetwork.gke_subnet[0].id
 
   # Enable VPC-native (alias IP)
   networking_mode = "VPC_NATIVE"
