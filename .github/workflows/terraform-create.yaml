@@ -47,11 +47,16 @@ jobs:
           project_id              = "${PROJECT_ID}"
           region                  = "${REGION}"
           environment             = "dev"
+          network_name            = "${NETWORK_NAME}"
+          subnetwork_name         = "${SUBNETWORK_NAME}"
+          ip_range_pods           = "${IP_RANGE_PODS}"
+          ip_range_services       = "${IP_RANGE_SERVICES}"
           node_machine_type       = "${NODE_MACHINE_TYPE}"
           min_nodes               = ${MIN_NODES}
           max_nodes               = ${MAX_NODES}
           use_spot_instances      = ${USE_SPOT_INSTANCES}
           gke_deletion_protection = ${GKE_DELETION_PROTECTION}
+          argocd_hostname         = "${ARGOCD_HOSTNAME}"
 
           secrets = {
             ZEO_DB_PASSWORD = "${ZEO_DB_PASSWORD}"
@@ -62,11 +67,16 @@ jobs:
         env:
           PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
           REGION: ${{ vars.GCP_REGION || 'asia-south1' }}
+          NETWORK_NAME: ${{ vars.NETWORK_NAME || 'dev-gke-network' }}
+          SUBNETWORK_NAME: ${{ vars.SUBNETWORK_NAME || 'dev-gke-subnet' }}
+          IP_RANGE_PODS: ${{ vars.IP_RANGE_PODS || '10.1.0.0/16' }}
+          IP_RANGE_SERVICES: ${{ vars.IP_RANGE_SERVICES || '10.2.0.0/20' }}
           NODE_MACHINE_TYPE: ${{ vars.NODE_MACHINE_TYPE || 'e2-medium' }}
           MIN_NODES: ${{ vars.MIN_NODES || '1' }}
           MAX_NODES: ${{ vars.MAX_NODES || '5' }}
           USE_SPOT_INSTANCES: ${{ vars.USE_SPOT_INSTANCES || 'true' }}
           GKE_DELETION_PROTECTION: ${{ vars.GKE_DELETION_PROTECTION || 'true' }}
+          ARGOCD_HOSTNAME: ${{ vars.ARGOCD_HOSTNAME || 'argocd.zebo.dev' }}
           ZEO_DB_PASSWORD: ${{ secrets.ZEO_DB_PASSWORD }}
           ZEO_OPENAI_KEY: ${{ secrets.ZEO_OPENAI_KEY }}
           ZEO_MF_UTIL_KEY: ${{ secrets.ZEO_MF_UTIL_KEY }}

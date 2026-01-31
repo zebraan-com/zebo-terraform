@@ -19,25 +19,25 @@ variable "environment" {
 variable "network_name" {
   description = "VPC network name"
   type        = string
-  default     = "default"
+  default     = "dev-gke-network"
 }
 
 variable "subnetwork_name" {
   description = "Subnetwork name"
   type        = string
-  default     = "default"
+  default     = "dev-gke-subnet"
 }
 
 variable "ip_range_pods" {
   description = "Secondary IP range for pods"
   type        = string
-  default     = "pods"
+  default     = "10.1.0.0/16"
 }
 
 variable "ip_range_services" {
   description = "Secondary IP range for services"
   type        = string
-  default     = "services"
+  default     = "10.2.0.0/20"
 }
 
 variable "node_machine_type" {
