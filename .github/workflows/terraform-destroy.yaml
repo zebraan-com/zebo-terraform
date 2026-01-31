@@ -87,18 +87,34 @@ jobs:
       #     # Verify installation
       #     which gke-gcloud-auth-plugin
           
-      - name: Configure Kubernetes access
+      - name: Create Provider Override for Destroy
         run: |
-          # Get cluster credentials
-          gcloud container clusters get-credentials $(terraform output -raw cluster_name) \
-            --region ${{ vars.GCP_REGION || 'asia-south1' }} \
-            --project $(terraform output -raw project_id)
-          
-          # Update kubeconfig to use the auth plugin
-          echo "export USE_GKE_GCLOUD_AUTH_PLUGIN=True" >> $GITHUB_ENV
-          
-          # Test the connection
-          kubectl cluster-info
+          echo "Creating provider override file..."
+          CLUSTER_NAME=$(terraform output -raw cluster_name)
+          PROJECT_ID=$(terraform output -raw project_id)
+          REGION=${{ vars.GCP_REGION || 'asia-south1' }}
+
+          CLUSTER_ENDPOINT=$(gcloud container clusters describe $CLUSTER_NAME --region $REGION --project $PROJECT_ID --format 'value(endpoint)')
+          CLUSTER_CA_CERT=$(gcloud container clusters describe $CLUSTER_NAME --region $REGION --project $PROJECT_ID --format 'value(masterAuth.clusterCaCertificate)')
+          ACCESS_TOKEN=$(gcloud auth print-access-token)
+
+          cat > provider-destroy-override.tf <<EOL
+          provider "kubernetes" {
+            host                    = "https://$CLUSTER_ENDPOINT"
+            token                   = "$ACCESS_TOKEN"
+            cluster_ca_certificate  = base64decode("$CLUSTER_CA_CERT")
+          }
+
+          provider "helm" {
+            kubernetes {
+              host                    = "https://$CLUSTER_ENDPOINT"
+              token                   = "$ACCESS_TOKEN"
+              cluster_ca_certificate  = base64decode("$CLUSTER_CA_CERT")
+            }
+          }
+          EOL
+
+          echo "Provider override file created."
 
       - name: Terraform Plan (destroy)
         run: terraform plan -destroy -input=false -var-file=dev.ci.tfvars
