@@ -102,7 +102,7 @@ jobs:
         run: |
           # Get cluster credentials using the correct output names
           gcloud container clusters get-credentials $(terraform output -raw cluster_name) \
-            --zone $(echo ${{ vars.GCP_REGION || 'asia-south1' }}-a) \
+            --region ${{ vars.GCP_REGION || 'asia-south1' }} \
             --project $(terraform output -raw project_id)
           
           # Apply the root application
