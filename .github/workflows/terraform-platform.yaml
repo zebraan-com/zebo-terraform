@@ -55,6 +55,19 @@ jobs:
       - name: Terraform Init
         run: terraform init -input=false
 
+      - name: Import Existing Resources
+        run: |
+          # Import existing resources if they exist (idempotent - won't fail if already imported)
+          terraform import google_storage_bucket.terraform_state ${PROJECT_ID}-terraform-state 2>/dev/null || true
+          terraform import google_service_account.terraform_ci projects/${PROJECT_ID}/serviceAccounts/terraform-ci@${PROJECT_ID}.iam.gserviceaccount.com 2>/dev/null || true
+          terraform import google_service_account.gke_node_sa projects/${PROJECT_ID}/serviceAccounts/gke-node-sa@${PROJECT_ID}.iam.gserviceaccount.com 2>/dev/null || true
+          terraform import module.artifact_registry.google_artifact_registry_repository.docker_repo projects/${PROJECT_ID}/locations/${REGION}/repositories/${REGISTRY_ID} 2>/dev/null || true
+        env:
+          PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          REGION: ${{ vars.GCP_REGION || 'asia-south1' }}
+          REGISTRY_ID: ${{ vars.REGISTRY_ID || 'zebo-registry' }}
+        continue-on-error: true
+
       - name: Terraform Fmt
         run: terraform fmt -check
 
