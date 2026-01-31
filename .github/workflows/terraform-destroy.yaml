@@ -73,8 +73,23 @@ jobs:
       - name: Disable deletion protection on GKE cluster
         run: terraform apply -input=false -auto-approve -var-file=dev.ci.tfvars -target=module.gke_cluster.google_container_cluster.primary
 
+      - name: Configure kubectl
+        run: |
+          # Get cluster credentials
+          gcloud container clusters get-credentials $(terraform output -raw cluster_name) \
+            --region ${{ vars.GCP_REGION || 'asia-south1' }} \
+            --project $(terraform output -raw project_id)
+          
+          # Test the connection
+          kubectl cluster-info
+
       - name: Terraform Plan (destroy)
         run: terraform plan -destroy -input=false -var-file=dev.ci.tfvars
 
       - name: Terraform Destroy
-        run: terraform destroy -input=false -auto-approve -var-file=dev.ci.tfvars
+        run: |
+          # First, try to delete the ArgoCD application to clean up resources
+          kubectl delete application zebo-platform -n argocd --ignore-not-found=true || true
+          
+          # Then run terraform destroy
+          terraform destroy -input=false -auto-approve -var-file=dev.ci.tfvars
