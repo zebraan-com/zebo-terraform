@@ -1,4 +1,4 @@
-name: Terraform Dev Environment
+name: Terraform Create Environment
 
 on: 
   workflow_dispatch:
