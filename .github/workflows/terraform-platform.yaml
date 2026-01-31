@@ -40,6 +40,18 @@ jobs:
         with:
           terraform_version: 1.9.5
 
+      - name: Write platform.tfvars from secrets
+        run: |
+          cat > platform.tfvars <<EOF
+          project_id  = "${PROJECT_ID}"
+          region      = "${REGION}"
+          registry_id = "${REGISTRY_ID}"
+          EOF
+        env:
+          PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          REGION: ${{ vars.GCP_REGION || 'asia-south1' }}
+          REGISTRY_ID: ${{ vars.REGISTRY_ID || 'zebo-registry' }}
+
       - name: Terraform Init
         run: terraform init -input=false
 
