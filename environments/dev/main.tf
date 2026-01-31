@@ -59,8 +59,8 @@ module "gke_cluster" {
   gke_node_pool_sa_email = data.google_service_account.gke_node_sa.email
 
   # Network configuration
-  network_name    = var.network_name
-  subnetwork_name = var.subnetwork_name
+  network_name      = var.network_name
+  subnetwork_name   = var.subnetwork_name
   ip_range_pods     = var.ip_range_pods
   ip_range_services = var.ip_range_services
 
@@ -192,7 +192,7 @@ output "argocd_admin_password" {
 }
 
 output "argocd_access_info" {
-  value = <<EOT
+  value       = <<EOT
 ArgoCD Access Information:
 --------------------------
 URL: http://${try(kubernetes_service.argocd_server_lb.status.0.load_balancer.0.ingress.0.ip, "pending...")}
