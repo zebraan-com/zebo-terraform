@@ -81,3 +81,9 @@ variable "secrets" {
   type        = map(string)
   default     = {}
 }
+
+variable "registry_id" {
+  description = "Artifact Registry repository ID (from platform layer)"
+  type        = string
+  default     = "zebo-registry"
+}

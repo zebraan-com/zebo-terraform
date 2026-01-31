@@ -27,5 +27,5 @@ output "artifact_registry_repo_url" {
 
 output "gke_node_sa_email" {
   description = "Email of the GKE node service account"
-  value       = google_service_account.gke_node_sa.email
+  value       = data.google_service_account.gke_node_sa.email
 }
