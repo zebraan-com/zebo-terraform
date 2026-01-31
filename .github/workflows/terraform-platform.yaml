@@ -55,12 +55,6 @@ jobs:
       - name: Terraform Init
         run: terraform init -input=false
 
-      - name: Import Existing Resources
-        run: |
-          chmod +x import_existing_resources.sh
-          ./import_existing_resources.sh || true
-        continue-on-error: true
-
       - name: Terraform Fmt
         run: terraform fmt -check
 
