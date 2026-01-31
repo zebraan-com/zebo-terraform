@@ -100,9 +100,9 @@ jobs:
       - name: Apply ArgoCD Root Application
         if: github.ref == 'refs/heads/main'
         run: |
-          # Get cluster credentials
-          gcloud container clusters get-credentials $(terraform output -raw kubernetes_cluster_name) \
-            --region $(terraform output -raw region) \
+          # Get cluster credentials using the correct output names
+          gcloud container clusters get-credentials $(terraform output -raw cluster_name) \
+            --zone $(echo ${{ vars.GCP_REGION || 'asia-south1' }}-a) \
             --project $(terraform output -raw project_id)
           
           # Apply the root application
