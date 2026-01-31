@@ -87,15 +87,43 @@ jobs:
       #     # Verify installation
       #     which gke-gcloud-auth-plugin
           
-      - name: Configure kubectl
+      - name: Configure Kubernetes provider
         run: |
           # Get cluster credentials
           gcloud container clusters get-credentials $(terraform output -raw cluster_name) \
             --region ${{ vars.GCP_REGION || 'asia-south1' }} \
             --project $(terraform output -raw project_id)
           
+          # Create kubeconfig for Terraform
+          mkdir -p ~/.kube
+          KUBECONFIG=~/.kube/config
+          
+          # Update kubeconfig to use the auth plugin
+          echo "export KUBECONFIG=$KUBECONFIG" >> $GITHUB_ENV
+          echo "export USE_GKE_GCLOUD_AUTH_PLUGIN=True" >> $GITHUB_ENV
+          
           # Test the connection
           kubectl cluster-info
+          
+          # Create provider.tf for destroy
+          cat > provider.tf <<EOL
+          provider "kubernetes" {
+            host  = "https://$(gcloud container clusters describe $(terraform output -raw cluster_name) \
+              --region ${{ vars.GCP_REGION || 'asia-south1' }} \
+              --project $(terraform output -raw project_id) \
+              --format 'value(endpoint)')"
+            token = "$(gcloud auth print-access-token)"
+            cluster_ca_certificate = base64decode(
+              "$(gcloud container clusters describe $(terraform output -raw cluster_name) \
+                --region ${{ vars.GCP_REGION || 'asia-south1' }} \
+                --project $(terraform output -raw project_id) \
+                --format 'value(masterAuth.clusterCaCertificate)')"
+            )
+          }
+          EOL
+          
+          # Reinitialize Terraform with the new provider
+          terraform init -input=false
 
       - name: Terraform Plan (destroy)
         run: terraform plan -destroy -input=false -var-file=dev.ci.tfvars
