@@ -17,10 +17,21 @@ jobs:
 
     permissions:
       contents: read
+      id-token: write
 
     steps:
-      - name: Checkout
+      - name: Checkout terraform repo
         uses: actions/checkout@v4
+      #   with:
+      #     path: zebo-terraform
+
+      # - name: Checkout infra repo
+      #   uses: actions/checkout@v4
+      #   with:
+      #     repository: zebraan-com/zebo-infra
+      #     token: ${{ secrets.GITHUB_TOKEN }}
+      #     path: zebo-infra
+
 
       - name: Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
@@ -97,36 +108,64 @@ jobs:
         if: github.ref == 'refs/heads/main'
         run: terraform apply -input=false -auto-approve -var-file=dev.ci.tfvars
 
-      - name: Apply ArgoCD Root Application
-        if: github.ref == 'refs/heads/main'
+      - name: Get GKE credentials
         run: |
-          # Get cluster credentials using the correct output names
-          gcloud container clusters get-credentials $(terraform output -raw cluster_name) \
-            --region ${{ vars.GCP_REGION || 'asia-south1' }} \
-            --project $(terraform output -raw project_id)
-          
-          # Apply the root application
-          kubectl apply -f ../../argocd/root-application.yaml
-          
-          # Wait for the application to be created
-          kubectl wait --for=condition=established --timeout=60s -n argocd crd/applications.argoproj.io
+          gcloud container clusters get-credentials dev-gke-cluster \
+            --region asia-south1 \
+            --project ${{ secrets.GCP_PROJECT_ID }}
 
-      - name: Get ArgoCD Info
-        if: github.ref == 'refs/heads/main'
-        id: argocd
+      - name: Create argocd namespace
         run: |
-          echo "Getting ArgoCD access information..."
-          ARGOCD_URL=$(terraform output -raw argocd_url)
-          echo "argocd_url=$ARGOCD_URL" >> $GITHUB_OUTPUT
-          echo "::notice title=ArgoCD URL::$ARGOCD_URL"
-          echo "::notice title=ArgoCD Username::admin"
-          echo "::notice title=ArgoCD Password::Run 'terraform output -raw argocd_admin_password' to retrieve"
+          kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: Display Outputs
-        if: github.ref == 'refs/heads/main'
+      - name: Install ArgoCD
         run: |
-          echo "========================================="
-          echo "   DEPLOYMENT SUCCESSFUL!"
-          echo "========================================="
-          terraform output argocd_access_info
-          echo "========================================="
+          helm repo add argo https://argoproj.github.io/argo-helm
+          helm repo update
+
+          helm upgrade --install argocd argo/argo-cd \
+            --namespace argocd \
+            -f environments/dev/argocd-values.yaml
+
+      - name: Apply ArgoCD Root App
+        run: |
+          kubectl apply -f argocd/root-application.yaml
+
+      - name: Output Preview URL
+        run: |
+          echo "ArgoCD UI:"
+          echo "kubectl port-forward svc/argocd-server -n argocd 8080:443"
+
+      # - name: Apply ArgoCD Root Application
+      #   if: github.ref == 'refs/heads/main'
+      #   run: |
+      #     # Get cluster credentials using the correct output names
+      #     gcloud container clusters get-credentials $(terraform output -raw cluster_name) \
+      #       --region ${{ vars.GCP_REGION || 'asia-south1' }} \
+      #       --project $(terraform output -raw project_id)
+          
+      #     # Apply the root application
+      #     kubectl apply -f ../../argocd/root-application.yaml
+          
+      #     # Wait for the application to be created
+      #     kubectl wait --for=condition=established --timeout=60s -n argocd crd/applications.argoproj.io
+
+      # - name: Get ArgoCD Info
+      #   if: github.ref == 'refs/heads/main'
+      #   id: argocd
+      #   run: |
+      #     echo "Getting ArgoCD access information..."
+      #     ARGOCD_URL=$(terraform output -raw argocd_url)
+      #     echo "argocd_url=$ARGOCD_URL" >> $GITHUB_OUTPUT
+      #     echo "::notice title=ArgoCD URL::$ARGOCD_URL"
+      #     echo "::notice title=ArgoCD Username::admin"
+      #     echo "::notice title=ArgoCD Password::Run 'terraform output -raw argocd_admin_password' to retrieve"
+
+      # - name: Display Outputs
+      #   if: github.ref == 'refs/heads/main'
+      #   run: |
+      #     echo "========================================="
+      #     echo "   DEPLOYMENT SUCCESSFUL!"
+      #     echo "========================================="
+      #     terraform output argocd_access_info
+      #     echo "========================================="

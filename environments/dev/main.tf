@@ -82,92 +82,92 @@ data "google_container_cluster" "primary" {
   depends_on = [module.gke_cluster]
 }
 
-provider "kubernetes" {
-  host  = "https://${data.google_container_cluster.primary.endpoint}"
-  token = data.google_client_config.provider.access_token
-  cluster_ca_certificate = base64decode(
-    data.google_container_cluster.primary.master_auth[0].cluster_ca_certificate
-  )
-}
+# provider "kubernetes" {
+#   host  = "https://${data.google_container_cluster.primary.endpoint}"
+#   token = data.google_client_config.provider.access_token
+#   cluster_ca_certificate = base64decode(
+#     data.google_container_cluster.primary.master_auth[0].cluster_ca_certificate
+#   )
+# }
 
-provider "helm" {
-  kubernetes {
-    host  = "https://${data.google_container_cluster.primary.endpoint}"
-    token = data.google_client_config.provider.access_token
-    cluster_ca_certificate = base64decode(
-      data.google_container_cluster.primary.master_auth[0].cluster_ca_certificate
-    )
-  }
-}
+# provider "helm" {
+#   kubernetes {
+#     host  = "https://${data.google_container_cluster.primary.endpoint}"
+#     token = data.google_client_config.provider.access_token
+#     cluster_ca_certificate = base64decode(
+#       data.google_container_cluster.primary.master_auth[0].cluster_ca_certificate
+#     )
+#   }
+# }
 
 # Create argocd namespace
-resource "kubernetes_namespace" "argocd" {
-  metadata {
-    name = "argocd"
-  }
+# resource "kubernetes_namespace" "argocd" {
+#   metadata {
+#     name = "argocd"
+#   }
 
-  depends_on = [module.gke_cluster]
-}
+#   depends_on = [module.gke_cluster]
+# }
 
 # Install ArgoCD via Helm
-resource "helm_release" "argocd" {
-  name       = "argocd"
-  repository = "https://argoproj.github.io/argo-helm"
-  chart      = "argo-cd"
-  version    = "5.51.6" # Pin version for stability
-  namespace  = kubernetes_namespace.argocd.metadata[0].name
+# resource "helm_release" "argocd" {
+#   name       = "argocd"
+#   repository = "https://argoproj.github.io/argo-helm"
+#   chart      = "argo-cd"
+#   version    = "5.51.6" # Pin version for stability
+#   namespace  = kubernetes_namespace.argocd.metadata[0].name
 
-  values = [templatefile("${path.module}/argocd-values.yaml", {
-    hostname = var.argocd_hostname
-  })]
+#   values = [templatefile("${path.module}/argocd-values.yaml", {
+#     hostname = var.argocd_hostname
+#   })]
 
-  depends_on = [kubernetes_namespace.argocd]
-}
+#   depends_on = [kubernetes_namespace.argocd]
+# }
 
 # Create LoadBalancer service to expose ArgoCD UI
-resource "kubernetes_service" "argocd_server_lb" {
-  metadata {
-    name      = "argocd-server-lb"
-    namespace = kubernetes_namespace.argocd.metadata[0].name
-    labels = {
-      "app.kubernetes.io/name" = "argocd-server"
-    }
-  }
+# resource "kubernetes_service" "argocd_server_lb" {
+#   metadata {
+#     name      = "argocd-server-lb"
+#     namespace = kubernetes_namespace.argocd.metadata[0].name
+#     labels = {
+#       "app.kubernetes.io/name" = "argocd-server"
+#     }
+#   }
 
-  spec {
-    type = "LoadBalancer"
+#   spec {
+#     type = "LoadBalancer"
 
-    selector = {
-      "app.kubernetes.io/name" = "argocd-server"
-    }
+#     selector = {
+#       "app.kubernetes.io/name" = "argocd-server"
+#     }
 
-    port {
-      name        = "http"
-      port        = 80
-      target_port = 8080
-      protocol    = "TCP"
-    }
+#     port {
+#       name        = "http"
+#       port        = 80
+#       target_port = 8080
+#       protocol    = "TCP"
+#     }
 
-    port {
-      name        = "https"
-      port        = 443
-      target_port = 8080
-      protocol    = "TCP"
-    }
-  }
+#     port {
+#       name        = "https"
+#       port        = 443
+#       target_port = 8080
+#       protocol    = "TCP"
+#     }
+#   }
 
-  depends_on = [helm_release.argocd]
-}
+#   depends_on = [helm_release.argocd]
+# }
 
 # Get ArgoCD admin password
-data "kubernetes_secret" "argocd_initial_admin_secret" {
-  metadata {
-    name      = "argocd-initial-admin-secret"
-    namespace = kubernetes_namespace.argocd.metadata[0].name
-  }
+# data "kubernetes_secret" "argocd_initial_admin_secret" {
+#   metadata {
+#     name      = "argocd-initial-admin-secret"
+#     namespace = kubernetes_namespace.argocd.metadata[0].name
+#   }
 
-  depends_on = [helm_release.argocd]
-}
+#   depends_on = [helm_release.argocd]
+# }
 
 # Outputs
 output "gke_cluster_name" {
@@ -180,27 +180,27 @@ output "gcloud_get_credentials" {
   description = "Command to configure kubectl"
 }
 
-output "argocd_url" {
-  value       = "http://${kubernetes_service.argocd_server_lb.status.0.load_balancer.0.ingress.0.ip}"
-  description = "ArgoCD UI URL (HTTP)"
-}
+# output "argocd_url" {
+#   value       = "http://${kubernetes_service.argocd_server_lb.status.0.load_balancer.0.ingress.0.ip}"
+#   description = "ArgoCD UI URL (HTTP)"
+# }
 
-output "argocd_admin_password" {
-  value       = try(data.kubernetes_secret.argocd_initial_admin_secret.data["password"], "")
-  description = "ArgoCD admin password"
-  sensitive   = true
-}
+# output "argocd_admin_password" {
+#   value       = try(data.kubernetes_secret.argocd_initial_admin_secret.data["password"], "")
+#   description = "ArgoCD admin password"
+#   sensitive   = true
+# }
 
-output "argocd_access_info" {
-  value       = <<EOT
-ArgoCD Access Information:
---------------------------
-URL: http://${try(kubernetes_service.argocd_server_lb.status.0.load_balancer.0.ingress.0.ip, "pending...")}
-Username: admin
-Password: (run 'terraform output argocd_admin_password' to see)
+# output "argocd_access_info" {
+#   value       = <<EOT
+# ArgoCD Access Information:
+# --------------------------
+# URL: http://${try(kubernetes_service.argocd_server_lb.status.0.load_balancer.0.ingress.0.ip, "pending...")}
+# Username: admin
+# Password: (run 'terraform output argocd_admin_password' to see)
 
-To get password:
-terraform output -raw argocd_admin_password
-EOT
-  description = "ArgoCD access information"
-}
+# To get password:
+# terraform output -raw argocd_admin_password
+# EOT
+#   description = "ArgoCD access information"
+# }
