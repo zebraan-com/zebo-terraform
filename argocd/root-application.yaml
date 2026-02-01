@@ -9,10 +9,7 @@ spec:
   source:
     repoURL: https://github.com/zebraan-com/zebo-infra.git
     targetRevision: HEAD
-    path: charts/zebo-app
-    helm:
-      valueFiles:
-        - values-dev.yaml
+    path: apps
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd
