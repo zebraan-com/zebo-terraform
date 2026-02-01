@@ -72,6 +72,18 @@ jobs:
 
       - name: Terraform Init
         run: terraform init -input=false
+      
+      - name: Terraform state list
+        run: terraform state list
+
+      - name: Terraform state for helm kubernetes and argocd
+        run:  |
+          terraform state list | grep kubernetes
+          terraform state list | grep helm
+          terraform state list | grep argocd
+
+      - name: Terraform state after cleanup
+        run: terraform state list | grep -E "kubernetes|helm|argocd"
 
       - name: Disable deletion protection on GKE cluster
         run: terraform apply -input=false -auto-approve -var-file=dev.ci.tfvars -target=module.gke_cluster.google_container_cluster.primary
