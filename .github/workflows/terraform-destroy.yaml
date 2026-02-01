@@ -26,10 +26,7 @@ jobs:
 
       - name: Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
-        with:
-          version: '>= 410.0.0'
-          install_components: 'gke-gcloud-auth-plugin'
-
+        
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
@@ -72,45 +69,12 @@ jobs:
 
       - name: Terraform Init
         run: terraform init -input=false
-      
-      - name: Terraform state list
-        run: terraform state list
-
-      - name: Terraform state for helm kubernetes and argocd
-        run:  terraform state list | grep -E "kubernetes|helm|argocd"
-
-      - name: Terraform state remove for helm kubernetes and argocd
-        run: |
-          terraform state rm kubernetes_namespace.argocd
-          terraform state rm kubernetes_service.argocd_server_lb
-          terraform state rm helm_release.argocd
-
-      - name: Terraform state after cleanup
-        run: terraform state list | grep -E "kubernetes|helm|argocd"
 
       - name: Disable deletion protection on GKE cluster
         run: terraform apply -input=false -auto-approve -var-file=dev.ci.tfvars -target=module.gke_cluster.google_container_cluster.primary
-
-      # - name: Install gke-gcloud-auth-plugin
-      #   run: |
-      #     # Install the auth plugin using the correct package name for GitHub Actions
-      #     sudo apt-get update && sudo apt-get install -y kubectl google-cloud-sdk-gke-gcloud-auth-plugin
-          
-      #     # Update kubeconfig to use the auth plugin
-      #     echo "export USE_GKE_GCLOUD_AUTH_PLUGIN=True" >> $GITHUB_ENV
-          
-      #     # Verify installation
-      #     which gke-gcloud-auth-plugin
-          
-      
 
       - name: Terraform Plan (destroy)
         run: terraform plan -destroy -input=false -var-file=dev.ci.tfvars
 
       - name: Terraform Destroy
-        run: |
-          # First, try to delete the ArgoCD application to clean up resources
-          # kubectl delete application zebo-platform -n argocd --ignore-not-found=true || true
-          
-          # Then run terraform destroy
-          terraform destroy -input=false -auto-approve -var-file=dev.ci.tfvars
+        run: terraform destroy -input=false -auto-approve -var-file=dev.ci.tfvars
