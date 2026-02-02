@@ -5,6 +5,7 @@ on:
     paths:
       - 'environments/dev/**'
       - 'modules/**'
+      - 'argocd/**'
       - '.github/workflows/terraform-create.yaml'
 
 jobs:
