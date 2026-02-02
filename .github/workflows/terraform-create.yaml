@@ -125,7 +125,7 @@ jobs:
 
           helm upgrade --install argocd argo/argo-cd \
             --namespace argocd \
-            -f environments/dev/argocd-values.yaml
+            -f argocd-values.yaml
 
       - name: Apply ArgoCD Root App
         run: |
