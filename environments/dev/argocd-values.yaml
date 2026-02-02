@@ -1,71 +1,33 @@
-# ArgoCD Helm Chart Values
-# Configured for GKE with LoadBalancer access
-
 global:
   domain: ${hostname}
 
-# Configure ArgoCD root application
-# configs:
-#   cm:
-#     # Enable management of additional applications
-#     resource.customizations: |
-#       argoproj.io/Application:
-#         health.lua: |
-#           hs = {}
-#           hs.status = "Progressing"
-#           hs.message = ""
-#           if obj.status ~= nil and obj.status.health ~= nil then
-#             hs.status = obj.status.health.status
-#             hs.message = obj.status.health.message
-#           end
-#           return hs
-  
-#   # Root application definition
-#   applications:
-#     zebo-platform: |
-#       apiVersion: argoproj.io/v1alpha1
-#       kind: Application
-#       metadata:
-#         name: zebo-platform
-#         namespace: argocd
-#       spec:
-#         project: default
-#         source:
-#           repoURL: https://github.com/zebraan-com/zebo-infra.git
-#           targetRevision: HEAD
-#           path: argocd/applications
-#         destination:
-#           server: https://kubernetes.default.svc
-#           namespace: argocd
-#         syncPolicy:
-#           automated:
-#             selfHeal: true
-#             prune: true
-#           syncOptions:
-#             - CreateNamespace=true
+configs:
+  params:
+    server.insecure: true
 
 server:
   service:
-    type: ClusterIP  # We create a separate LoadBalancer service
-  
-  # Disable HTTPS redirect since we're using HTTP LoadBalancer
+    type: ClusterIP
+
   extraArgs:
     - --insecure
 
-  # Enable metrics
+  ingress:
+    enabled: false
+
   metrics:
     enabled: true
     serviceMonitor:
-      enabled: false  # Set to true if you have Prometheus Operator
+      enabled: false
 
-  ingress:
-    enabled: false  # Using LoadBalancer instead of Ingress
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
 
-configs:
-  params:
-    server.insecure: true  # Allow HTTP access
-
-# Resource limits for cost optimization
 controller:
   resources:
     limits:
@@ -74,15 +36,6 @@ controller:
     requests:
       cpu: 250m
       memory: 256Mi
-
-server:
-  resources:
-    limits:
-      cpu: 200m
-      memory: 256Mi
-    requests:
-      cpu: 100m
-      memory: 128Mi
 
 repoServer:
   resources:
@@ -94,6 +47,7 @@ repoServer:
       memory: 128Mi
 
 applicationSet:
+  enabled: true
   resources:
     limits:
       cpu: 200m
@@ -102,7 +56,6 @@ applicationSet:
       cpu: 100m
       memory: 128Mi
 
-# Redis
 redis:
   resources:
     limits:
@@ -111,7 +64,3 @@ redis:
     requests:
       cpu: 100m
       memory: 64Mi
-
-# Enable ApplicationSet controller
-applicationSet:
-  enabled: true

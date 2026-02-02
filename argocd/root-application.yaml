@@ -12,13 +12,10 @@ spec:
     path: apps
   destination:
     server: https://kubernetes.default.svc
-    namespace: argocd
+    namespace: argocd/zebo-app/dev
   syncPolicy:
     automated:
       selfHeal: true
       prune: true
     syncOptions:
       - CreateNamespace=true
-  server:
-    extraArgs:
-      - --insecure
