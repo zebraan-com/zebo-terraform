@@ -111,7 +111,7 @@ jobs:
       - name: Get GKE credentials
         run: |
           gcloud container clusters get-credentials dev-gke-cluster \
-            --region asia-south1 \
+            --region ${{ vars.GCP_REGION || 'asia-south1' }} \
             --project ${{ secrets.GCP_PROJECT_ID }}
 
       - name: Create argocd namespace
@@ -135,37 +135,3 @@ jobs:
         run: |
           echo "ArgoCD UI:"
           echo "kubectl port-forward svc/argocd-server -n argocd 8080:443"
-
-      # - name: Apply ArgoCD Root Application
-      #   if: github.ref == 'refs/heads/main'
-      #   run: |
-      #     # Get cluster credentials using the correct output names
-      #     gcloud container clusters get-credentials $(terraform output -raw cluster_name) \
-      #       --region ${{ vars.GCP_REGION || 'asia-south1' }} \
-      #       --project $(terraform output -raw project_id)
-          
-      #     # Apply the root application
-      #     kubectl apply -f ../../argocd/root-application.yaml
-          
-      #     # Wait for the application to be created
-      #     kubectl wait --for=condition=established --timeout=60s -n argocd crd/applications.argoproj.io
-
-      # - name: Get ArgoCD Info
-      #   if: github.ref == 'refs/heads/main'
-      #   id: argocd
-      #   run: |
-      #     echo "Getting ArgoCD access information..."
-      #     ARGOCD_URL=$(terraform output -raw argocd_url)
-      #     echo "argocd_url=$ARGOCD_URL" >> $GITHUB_OUTPUT
-      #     echo "::notice title=ArgoCD URL::$ARGOCD_URL"
-      #     echo "::notice title=ArgoCD Username::admin"
-      #     echo "::notice title=ArgoCD Password::Run 'terraform output -raw argocd_admin_password' to retrieve"
-
-      # - name: Display Outputs
-      #   if: github.ref == 'refs/heads/main'
-      #   run: |
-      #     echo "========================================="
-      #     echo "   DEPLOYMENT SUCCESSFUL!"
-      #     echo "========================================="
-      #     terraform output argocd_access_info
-      #     echo "========================================="
