@@ -130,7 +130,7 @@ jobs:
 
       - name: Apply ArgoCD Root App
         run: |
-          kubectl apply -f root-application.yaml
+          kubectl apply -f ../../argocd/root-application.yaml
 
       - name: Output Preview URL
         run: |
