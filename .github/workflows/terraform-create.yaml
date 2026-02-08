@@ -128,7 +128,7 @@ jobs:
             --from-literal=type=git \
             --from-literal=url=https://github.com/zebraan-com/zebo-infra.git \
             --from-literal=username=not-used \
-            --from-literal=password=${{ secrets.GITHUB_TOKEN }} \
+            --from-literal=password=${{ secrets.INFRA_REPO_TOKEN }} \
             -n argocd \
             --dry-run=client -o yaml | kubectl apply -f -
           
