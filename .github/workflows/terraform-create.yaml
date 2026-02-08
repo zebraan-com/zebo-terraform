@@ -117,17 +117,11 @@ jobs:
 
       - name: Wait for ArgoCD to be ready
         run: |
-          echo "Waiting for ArgoCD server to be available..."
-          kubectl wait --for=condition=available --timeout=600s \
-            deployment/argocd-server -n argocd
+          echo "Waiting for ArgoCD to be ready..."
+          kubectl wait --for=condition=available deployment/argocd-server -n argocd --timeout=600s
           
           echo "Waiting for ArgoCD application controller to be ready..."
-          kubectl wait --for=condition=available --timeout=600s \
-            deployment/argocd-application-controller -n argocd
-          
-          echo "Waiting for ArgoCD repo server to be ready..."
-          kubectl wait --for=condition=available --timeout=600s \
-            deployment/argocd-repo-server -n argocd
+          kubectl rollout status statefulset/argocd-application-controller -n argocd --timeout=600s
 
       - name: Create GitHub repository secret for ArgoCD
         run: |
