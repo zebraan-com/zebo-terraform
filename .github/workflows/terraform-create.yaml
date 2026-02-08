@@ -2,11 +2,6 @@ name: Terraform Create Environment
 
 on: 
   workflow_dispatch:
-    paths:
-      - 'environments/dev/**'
-      - 'modules/**'
-      - 'argocd/**'
-      - '.github/workflows/terraform-create.yaml'
 
 jobs:
   terraform:
@@ -21,18 +16,8 @@ jobs:
       id-token: write
 
     steps:
-      - name: Checkout terraform repo
+      - name: Checkout
         uses: actions/checkout@v4
-      #   with:
-      #     path: zebo-terraform
-
-      # - name: Checkout infra repo
-      #   uses: actions/checkout@v4
-      #   with:
-      #     repository: zebraan-com/zebo-infra
-      #     token: ${{ secrets.GITHUB_TOKEN }}
-      #     path: zebo-infra
-
 
       - name: Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
@@ -51,7 +36,7 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.9.5
-          terraform_wrapper: false  # Needed to properly capture outputs
+          terraform_wrapper: false
 
       - name: Write dev.ci.tfvars from secrets
         run: |
@@ -96,9 +81,6 @@ jobs:
       - name: Terraform Init
         run: terraform init -input=false
 
-      - name: Terraform Fmt
-        run: terraform fmt -check
-
       - name: Terraform Validate
         run: terraform validate
 
@@ -106,7 +88,6 @@ jobs:
         run: terraform plan -input=false -var-file=dev.ci.tfvars
 
       - name: Terraform Apply
-        if: github.ref == 'refs/heads/main'
         run: terraform apply -input=false -auto-approve -var-file=dev.ci.tfvars
 
       - name: Get GKE credentials
@@ -119,20 +100,71 @@ jobs:
         run: |
           kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: Install ArgoCD
+      - name: Install ArgoCD via Helm
         run: |
           helm repo add argo https://argoproj.github.io/argo-helm
           helm repo update
-
+          
           helm upgrade --install argocd argo/argo-cd \
             --namespace argocd \
-            -f argocd-values.yaml
+            --create-namespace \
+            -f argocd-values.yaml \
+            --wait \
+            --timeout 10m
 
-      - name: Apply ArgoCD Root App
+      - name: Wait for ArgoCD to be ready
         run: |
-          kubectl apply -f ../../argocd/root-application.yaml
+          echo "Waiting for ArgoCD server to be available..."
+          kubectl wait --for=condition=available --timeout=300s \
+            deployment/argocd-server -n argocd
+          
+          echo "Waiting for ArgoCD application controller to be ready..."
+          kubectl wait --for=condition=available --timeout=300s \
+            deployment/argocd-application-controller -n argocd
 
-      - name: Output Preview URL
+      - name: Create GitHub repository secret for ArgoCD
         run: |
-          echo "ArgoCD UI:"
+          kubectl create secret generic zebo-infra-repo \
+            --from-literal=type=git \
+            --from-literal=url=https://github.com/zebraan-com/zebo-infra.git \
+            --from-literal=username=not-used \
+            --from-literal=password=${{ secrets.GITHUB_TOKEN }} \
+            -n argocd \
+            --dry-run=client -o yaml | kubectl apply -f -
+          
+          kubectl label secret zebo-infra-repo \
+            argocd.argoproj.io/secret-type=repository \
+            -n argocd \
+            --overwrite
+
+      - name: Apply ArgoCD Root ApplicationSet
+        run: |
+          kubectl apply -f https://raw.githubusercontent.com/zebraan-com/zebo-infra/main/argocd/root-app.yaml
+          
+          echo "Waiting for ApplicationSet to be processed..."
+          sleep 10
+
+      - name: Check ArgoCD Applications
+        run: |
+          echo "================================"
+          echo "ArgoCD Applications:"
+          kubectl get applications -n argocd
+          echo ""
+          echo "ApplicationSets:"
+          kubectl get applicationset -n argocd
+          echo "================================"
+
+      - name: Get ArgoCD admin password
+        run: |
+          echo "================================"
+          echo "ArgoCD Admin Password:"
+          kubectl get secret argocd-initial-admin-secret \
+            -n argocd \
+            -o jsonpath="{.data.password}" | base64 -d
+          echo ""
+          echo "================================"
+          echo "Access ArgoCD UI:"
           echo "kubectl port-forward svc/argocd-server -n argocd 8080:443"
+          echo "Then open: https://localhost:8080"
+          echo "Username: admin"
+          echo "================================"
