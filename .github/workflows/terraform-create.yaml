@@ -113,7 +113,6 @@ jobs:
           
           helm upgrade --install argocd argo/argo-cd \
             --namespace argocd \
-            --create-namespace \
             -f argocd-values.yaml \
             --wait \
             --timeout 15m
