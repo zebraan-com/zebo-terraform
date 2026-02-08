@@ -113,9 +113,7 @@ jobs:
           
           helm upgrade --install argocd argo/argo-cd \
             --namespace argocd \
-            -f argocd-values.yaml \
-            --wait \
-            --timeout 15m
+            -f argocd-values.yaml 
 
       - name: Wait for ArgoCD to be ready
         run: |
