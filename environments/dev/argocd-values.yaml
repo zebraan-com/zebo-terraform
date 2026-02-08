@@ -1,5 +1,5 @@
 global:
-  domain: ${hostname}
+  domain: argocd.local
 
 configs:
   params:
