@@ -96,6 +96,12 @@ jobs:
             --region ${{ vars.GCP_REGION || 'asia-south1' }} \
             --project ${{ secrets.GCP_PROJECT_ID }}
 
+      - name: Wait for cluster to be fully ready
+        run: |
+          echo "Waiting for cluster nodes to be ready..."
+          kubectl wait --for=condition=Ready nodes --all --timeout=300s
+          echo "Cluster is ready!"
+
       - name: Create argocd namespace
         run: |
           kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
@@ -110,17 +116,21 @@ jobs:
             --create-namespace \
             -f argocd-values.yaml \
             --wait \
-            --timeout 10m
+            --timeout 15m
 
       - name: Wait for ArgoCD to be ready
         run: |
           echo "Waiting for ArgoCD server to be available..."
-          kubectl wait --for=condition=available --timeout=300s \
+          kubectl wait --for=condition=available --timeout=600s \
             deployment/argocd-server -n argocd
           
           echo "Waiting for ArgoCD application controller to be ready..."
-          kubectl wait --for=condition=available --timeout=300s \
+          kubectl wait --for=condition=available --timeout=600s \
             deployment/argocd-application-controller -n argocd
+          
+          echo "Waiting for ArgoCD repo server to be ready..."
+          kubectl wait --for=condition=available --timeout=600s \
+            deployment/argocd-repo-server -n argocd
 
       - name: Create GitHub repository secret for ArgoCD
         run: |
@@ -142,7 +152,7 @@ jobs:
           kubectl apply -f https://raw.githubusercontent.com/zebraan-com/zebo-infra/main/argocd/root-app.yaml
           
           echo "Waiting for ApplicationSet to be processed..."
-          sleep 10
+          sleep 30
 
       - name: Check ArgoCD Applications
         run: |
@@ -152,6 +162,9 @@ jobs:
           echo ""
           echo "ApplicationSets:"
           kubectl get applicationset -n argocd
+          echo ""
+          echo "Application Details:"
+          kubectl get applications -n argocd -o wide
           echo "================================"
 
       - name: Get ArgoCD admin password

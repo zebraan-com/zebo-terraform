@@ -22,8 +22,8 @@ server:
 
   resources:
     limits:
-      cpu: 200m
-      memory: 256Mi
+      cpu: 500m
+      memory: 512Mi
     requests:
       cpu: 100m
       memory: 128Mi
@@ -31,20 +31,20 @@ server:
 controller:
   resources:
     limits:
-      cpu: 500m
-      memory: 512Mi
+      cpu: 1000m
+      memory: 1Gi
     requests:
       cpu: 250m
-      memory: 256Mi
+      memory: 512Mi
 
 repoServer:
   resources:
     limits:
-      cpu: 200m
-      memory: 256Mi
+      cpu: 500m
+      memory: 512Mi
     requests:
       cpu: 100m
-      memory: 128Mi
+      memory: 256Mi
 
 applicationSet:
   enabled: true
